@@ -6,7 +6,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import asyncio
 import argparse
-import base64
 from enum import Enum
 import logging
 import os
@@ -19,11 +18,15 @@ from foxglove_websocket import run_cancellable
 from foxglove_websocket.server import FoxgloveServer, FoxgloveServerListener
 from foxglove_websocket.types import ChannelId, ChannelWithoutId, ClientChannel, ClientChannelId
 
+from transformers import ecal_schema_to_transformer
+from transformers.Base import BaseTransformer, read_json_schema, ecal_to_foxglove
 import ecal.core.core as ecal_core
 
 logger = logging.getLogger("FoxgloveServer")
 
-ecal_foxglove_encoding_mapping = {"proto": "protobuf", "base": "json"}
+ecal_foxglove_encoding_mapping = {"proto": "protobuf", 
+                                  "base": "json", 
+                                  "capnp": "json"}
 foxglove_ecal_encoding_mapping = dict(zip(ecal_foxglove_encoding_mapping.values(), ecal_foxglove_encoding_mapping.keys()))
 
 def get_foxglove_encoding(ecal_encoding : str):
@@ -47,6 +50,7 @@ def is_my_own_topic(topic):
 class MyChannelWithoutId(NamedTuple):
     topic: str
     encoding: str
+    ecalSchemaName: str
     schemaName: str
     schema: str
 
@@ -69,8 +73,6 @@ class MonitoringListener(ABC):
         Called when topics are no longer present in the monitoring
         """
         ...
-
-
 
 
 # This class is handling the ecal monitoring. 
@@ -121,12 +123,14 @@ class Monitoring(object):
                     encoding = ""
                     topic_type = ""
                 current_topic["encoding"] = get_foxglove_encoding(ecal_encoding=encoding)
-                current_topic["schemaName"] = topic_type
-                current_topic["schema"] = base64.b64encode(topic["tdesc"]).decode("ascii")
-                current_topics.add(MyChannelWithoutId(**current_topic))
+                if (topic_type in ecal_to_foxglove):
+                    current_topic["ecalSchemaName"] = topic_type
+                    current_topic["schemaName"] = ecal_to_foxglove[topic_type]
+                    current_topic["schema"] = read_json_schema(topic_type).read()
+                    current_topics.add(MyChannelWithoutId(**current_topic))
 
         return current_topics
-        
+
 class TimeSource(Enum):
     SEND_TIMESTAMP = 1
     LOCAL_TIME = 2
@@ -148,27 +152,30 @@ async def submit_to_queue(queue, id, topic_name, msg, send_time):
        logger.info("Dropping message of channel {}. Total messages dropped: {}".format(topic_name, messages_dropped))        
    except Exception as e:
        print("Caught exception in callback {}".format(e))   
-    
+
 
 # This class handles each available Topic
 # It contains an ecal subscriber, and will forward messages to the server.
 class TopicSubscriber(object):
     channel_id : ChannelId
     info : MyChannelWithoutId
-    subscriber : ecal_core.subscriber
+    transformer : BaseTransformer
     server : FoxgloveServer
     
-    def __init__(self, id : ChannelId, info : MyChannelWithoutId, queue: asyncio.Queue[ServerDatum],  time_source : TimeSource = TimeSource.LOCAL_TIME):
+    def __init__(self, id : ChannelId,
+                info : MyChannelWithoutId,
+                queue: asyncio.Queue[ServerDatum],
+                time_source : TimeSource = TimeSource.LOCAL_TIME):
         self.id = id
         self.info = info
-        self.subscriber = None
+        self.transformer = None
         self.event_loop = asyncio.get_event_loop()
         self.queue = queue
         self.time_source = time_source
 
     @property
     def is_subscribed(self):
-        return self.subscriber is not None
+        return self.transformer is not None
 
     def callback(self, topic_name, msg, send_time):
         coroutine = submit_to_queue(self.queue, self.id, topic_name, msg, send_time)
@@ -176,11 +183,11 @@ class TopicSubscriber(object):
         future = asyncio.run_coroutine_threadsafe(coroutine, self.event_loop)
     
     def subscribe(self):
-        self.subscriber = ecal_core.subscriber(self.info.topic)
-        self.subscriber.set_callback(self.callback)
+        self.transformer = ecal_schema_to_transformer[self.info.ecalSchemaName](self.info.topic)
+        self.transformer.set_callback(self.callback)
         
     def unsubscribe(self):
-        self.subscriber.destroy()
+        # self.subscriber.rem_callback()
         self.subscriber = None
 
 
@@ -298,7 +305,7 @@ async def main(args):
         monitoring.set_listener(connection_handler)
         asyncio.create_task(monitoring.monitoring())
         
-        asyncio.create_task(handle_messages( queue, server))
+        asyncio.create_task(handle_messages(queue, server))
 
         while True:
             await asyncio.sleep(0.5)
