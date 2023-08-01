@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 import json
-import python_jsonschema_objects as pjs
+from jsonschema import validate
 
 jsonschema_path = "../external/foxglove-schemas/schemas/jsonschema"
 ecal_python_path = "../external/ecal-common/python"
@@ -13,6 +13,7 @@ from capnp_subscriber import CapnpSubscriber
 
 ecal_to_foxglove = {
     "Odometry3d": "PosesInFrame",
+    "Path": "PosesInFrame",
 }
 
 def read_json_schema(ecal_typename):
@@ -27,12 +28,11 @@ class BaseTransformer(ABC):
 
         self.subscribers = []
         self.json_schema = json.load(read_json_schema(name))
-        self.json_builder = pjs.ObjectBuilder(self.json_schema)
         self.name = name
         self.topic = topic
         self.typeclass = ecal_struct
-        self.sub = CapnpSubscriber(self.name, 
-                            self.topic, 
+        self.sub = CapnpSubscriber(self.name,
+                            self.topic,
                             self.typeclass)
 
     def set_callback(self, callback):
@@ -41,6 +41,10 @@ class BaseTransformer(ABC):
     def notify_callbacks(self, topic_name, msg, ts):
         for callback in self.subscribers:
             callback(topic_name, msg, ts)
+
+    # can throw jsonschema.exceptions.ValidationError
+    def validate_json(self, jsondata):
+        validate(instance=jsondata, schema=self.json_schema)
 
     @abstractmethod
     def delete(self):

@@ -53,6 +53,7 @@ class MyChannelWithoutId(NamedTuple):
     ecalSchemaName: str
     schemaName: str
     schema: str
+    schemaEncoding: str
 
 class ServerDatum(NamedTuple):
     id: ChannelId
@@ -125,10 +126,13 @@ class Monitoring(object):
                 current_topic["encoding"] = get_foxglove_encoding(ecal_encoding=encoding)
                 if (topic_type in ecal_to_foxglove):
                     current_topic["ecalSchemaName"] = topic_type
-                    current_topic["schemaName"] = ecal_to_foxglove[topic_type]
-                    current_topic["schema"] = read_json_schema(topic_type).read()
-                    current_topics.add(MyChannelWithoutId(**current_topic))
+                    current_topic["schemaName"] = f"foxglove.{ecal_to_foxglove[topic_type]}"
 
+                    # TODO: generalize. hardcode jsonschema for now
+                    current_topic["schema"] = read_json_schema(topic_type).read()
+                    current_topic["schemaEncoding"] = "jsonschema"
+
+                    current_topics.add(MyChannelWithoutId(**current_topic))
         return current_topics
 
 class TimeSource(Enum):
@@ -212,6 +216,7 @@ class ConnectionHandler(MonitoringListener):
             channel_without_id = ChannelWithoutId(**topic._asdict())
             id = await self.server.add_channel(
                 channel_without_id
+
             )
             self.topic_subscriptions[topic.topic] = TopicSubscriber(id, topic, self.queue)
             self.id_channel_mapping[id] = topic.topic

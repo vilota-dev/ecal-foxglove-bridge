@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-from transformers.Odometry3 import Odometry3Transformer
+from transformers.Odometry3D import Odometry3DTransformer
+from transformers.Path import PathTransformer
 
 ecal_schema_to_transformer = {
-    "Odometry3d": Odometry3Transformer
+    "Odometry3d": Odometry3DTransformer,
+    "Path": PathTransformer
 }
