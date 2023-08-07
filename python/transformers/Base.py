@@ -14,6 +14,7 @@ from capnp_subscriber import CapnpSubscriber
 ecal_to_foxglove = {
     "Odometry3d": "PosesInFrame",
     "Path": "PosesInFrame",
+    "Image": "CompressedImage"
 }
 
 def read_json_schema(ecal_typename):
@@ -43,8 +44,9 @@ class BaseTransformer(ABC):
             callback(topic_name, msg, ts)
 
     # can throw jsonschema.exceptions.ValidationError
-    def validate_json(self, jsondata):
-        validate(instance=jsondata, schema=self.json_schema)
+    # or jsonschema.exceptions.SchemaError
+    def validate_json(self, instance):
+        validate(instance=instance, schema=self.json_schema)
 
     @abstractmethod
     def delete(self):

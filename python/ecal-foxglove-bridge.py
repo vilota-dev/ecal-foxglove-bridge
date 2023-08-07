@@ -302,7 +302,7 @@ async def main(args):
 
     queue: asyncio.Queue[ServerDatum] = asyncio.Queue(maxsize = 10)
     
-    async with FoxgloveServer("0.0.0.0", 8765, "example server", logger=logger, capabilities=["clientPublish"], supported_encodings=["json"]) as server:
+    async with FoxgloveServer("0.0.0.0", 8765, "vk-ecal-bridge", logger=logger, capabilities=["clientPublish"], supported_encodings=["json"]) as server:
         connection_handler = ConnectionHandler(server, queue)
         server.set_listener(Listener(connection_handler))
 

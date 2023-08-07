@@ -5,6 +5,8 @@ import capnp
 capnp.add_import_hook([ecal_capnp_path])
 import odometry3d_capnp as eCALMsg
 
+import json
+
 class Odometry3DTransformer(BaseTransformer):
     def __init__(self, topic):
         super().__init__(topic, eCALMsg, "Odometry3d")
@@ -15,11 +17,8 @@ class Odometry3DTransformer(BaseTransformer):
         self.sub.rem_callback(self.transform)
 
     def transform(self, topic_type, topic_name, msg, ts):
-        import json
         position_msg = msg.pose.position
         orientation_msg = msg.pose.orientation
-
-        print(topic_name)
 
         data = {}
         odom = {}
@@ -33,12 +32,11 @@ class Odometry3DTransformer(BaseTransformer):
             "z": orientation_msg.z,
             "w": orientation_msg.w }
         data['poses'] = [odom]
-        data['time'] = {
-            "secs": msg.header.stamp // 1000000000,
-            "nsecs": msg.header.stamp % 1000000000
+        data['timestamp'] = {
+            "sec": msg.header.stamp // 1000000000,
+            "nsec": msg.header.stamp % 1000000000
         }
         data['frame_id'] = "nwu"
-        self.validate_json(data)
        
         payload = json.dumps(data).encode("utf8")
         self.notify_callbacks(topic_name, payload, msg.header.stamp)

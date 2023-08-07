@@ -5,6 +5,8 @@ import capnp
 capnp.add_import_hook([ecal_capnp_path])
 import path_capnp as eCALMsg
 
+import json
+
 class PathTransformer(BaseTransformer):
     def __init__(self, topic):
         super().__init__(topic, eCALMsg, "Path")
@@ -15,7 +17,6 @@ class PathTransformer(BaseTransformer):
         self.sub.rem_callback(self.transform)
 
     def transform(self, topic_type, topic_name, msg, ts):
-        import json
         print(topic_name)
 
         data = {}
@@ -41,7 +42,6 @@ class PathTransformer(BaseTransformer):
             "nsecs": last_pose_ts % 1000000000
         }
         data['frame_id'] = "nwu"
-        self.validate_json(data)
         
         payload = json.dumps(data).encode("utf8")
         self.notify_callbacks(topic_name, payload, last_pose_ts)
