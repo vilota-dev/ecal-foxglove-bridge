@@ -313,7 +313,7 @@ async def main(args):
         asyncio.create_task(handle_messages(queue, server))
 
         while True:
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.1)
 
 def version_information():
   return '''ecal-foxglove-bridge {} using ecal: {}'''.format("0.2.0", ecal_core.getversion())
