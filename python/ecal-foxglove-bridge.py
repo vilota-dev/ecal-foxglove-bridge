@@ -18,7 +18,7 @@ from foxglove_websocket import run_cancellable
 from foxglove_websocket.server import FoxgloveServer, FoxgloveServerListener
 from foxglove_websocket.types import ChannelId, ChannelWithoutId, ClientChannel, ClientChannelId
 
-from transformers import ecal_schema_to_transformer
+from transformers import make_transformer
 from transformers.Base import BaseTransformer, read_json_schema, ecal_to_foxglove
 import ecal.core.core as ecal_core
 
@@ -48,6 +48,7 @@ def is_my_own_topic(topic):
 
 
 class MyChannelWithoutId(NamedTuple):
+    ecalTopic: str
     topic: str
     encoding: str
     ecalSchemaName: str
@@ -116,23 +117,27 @@ class Monitoring(object):
         for topic in topics:
             # only filter topics which are publishers, published by a different proces
             if topic['direction'] == 'publisher' and not is_my_own_topic(topic):
-                current_topic = {}
-                current_topic["topic"] = topic["tname"]
                 try:
                     encoding, topic_type = topic["ttype"].split(":")
                 except Exception:
                     encoding = ""
                     topic_type = ""
-                current_topic["encoding"] = get_foxglove_encoding(ecal_encoding=encoding)
                 if (topic_type in ecal_to_foxglove):
-                    current_topic["ecalSchemaName"] = topic_type
-                    current_topic["schemaName"] = f"foxglove.{ecal_to_foxglove[topic_type]}"
+                    fg_types = ecal_to_foxglove[topic_type]
 
-                    # TODO: generalize. hardcode jsonschema for now
-                    current_topic["schema"] = read_json_schema(topic_type).read()
-                    current_topic["schemaEncoding"] = "jsonschema"
+                    for type in fg_types:
+                        current_topic = {}
+                        current_topic["encoding"] = get_foxglove_encoding(encoding)
+                        current_topic["ecalSchemaName"] = topic_type
+                        current_topic["ecalTopic"] = topic["tname"]
+                        current_topic["topic"] = f"{topic['tname']}/{type}"
+                        current_topic["schemaName"] = f"foxglove.{type}"
+                        # TODO: generalize. hardcode jsonschema for now
+                        current_topic["schema"] = read_json_schema(type).read()
+                        current_topic["schemaEncoding"] = "jsonschema"
 
-                    current_topics.add(MyChannelWithoutId(**current_topic))
+                        current_topics.add(MyChannelWithoutId(**current_topic))
+
         return current_topics
 
 class TimeSource(Enum):
@@ -146,7 +151,6 @@ messages_dropped = 0
 async def submit_to_queue(queue, id, topic_name, msg, send_time):
    try:
        timestamp = time.time_ns()
-       
        datum = ServerDatum(id=id, timestamp = timestamp, msg = msg)
        queue.put_nowait(datum)
    except asyncio.QueueFull:
@@ -187,13 +191,11 @@ class TopicSubscriber(object):
         future = asyncio.run_coroutine_threadsafe(coroutine, self.event_loop)
     
     def subscribe(self):
-        self.transformer = ecal_schema_to_transformer[self.info.ecalSchemaName](self.info.topic)
-        self.transformer.set_callback(self.callback)
-        
-    def unsubscribe(self):
-        # self.subscriber.rem_callback()
-        self.subscriber = None
+        self.transformer = make_transformer(self.info.ecalTopic, self.info.ecalSchemaName)
+        self.transformer.set_callback(self.info.schemaName, self.callback)
 
+    def unsubscribe(self):
+        self.subscriber = None
 
 # This class handles all connections.
 # It advertises new topics to the server, and removes the ones that are no longer present in the monitoring
@@ -300,7 +302,7 @@ async def main(args):
     # sleep 1 second so monitoring info will be available
     await asyncio.sleep(1)
 
-    queue: asyncio.Queue[ServerDatum] = asyncio.Queue(maxsize = 10)
+    queue: asyncio.Queue[ServerDatum] = asyncio.Queue(maxsize = args.queue_size)
     
     async with FoxgloveServer("0.0.0.0", 8765, "vk-ecal-bridge", logger=logger, capabilities=["clientPublish"], supported_encodings=["json"]) as server:
         connection_handler = ConnectionHandler(server, queue)
@@ -320,7 +322,7 @@ def version_information():
 
 def parse_arguments():
   parser = argparse.ArgumentParser(description="Bridge application to forward data between eCAL network and Foxglove websocket connection")
-  parser.add_argument("--queue-size", dest="queue_size", type=int, help="Size of the queue where to keep messages before sending them over the websocket connection. If the queue is full, additional incoming messages will be dropped", default=3)
+  parser.add_argument("--queue-size", dest="queue_size", type=int, help="Size of the queue where to keep messages before sending them over the websocket connection. If the queue is full, additional incoming messages will be dropped", default=10)
   parser.add_argument('--version', action='version', version=version_information())
   args = parser.parse_args()     
   return args

@@ -32,9 +32,9 @@ class ImageTransformer(BaseTransformer):
             h = msg.height
             w = msg.width
             img_ndarray = np.repeat(
-                cv2.resize(np.frombuffer(msg.data, dtype=np.uint8).reshape((h, w, 1)), 
-                           (512, 320),
-                           interpolation = cv2.INTER_NEAREST).reshape((320, 512, 1)),
+                cv2.resize(np.frombuffer(msg.data, dtype=np.uint8).reshape((h, w, 1)),
+                           (w // 2, h // 2),
+                           interpolation = cv2.INTER_NEAREST).reshape((h // 2, w // 2, 1)),
                 3, axis=2)
             jpg_img = cv2.imencode('.webp', img_ndarray)
             data['data'] = base64.b64encode(jpg_img[1]).decode('utf8')
@@ -43,4 +43,4 @@ class ImageTransformer(BaseTransformer):
             return
        
         payload = json.dumps(data).encode("utf8")
-        self.notify_callbacks(topic_name, payload, msg.header.stamp)
+        self.notify_callbacks("foxglove.CompressedImage", topic_name, payload, msg.header.stamp)

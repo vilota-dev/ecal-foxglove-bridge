@@ -44,4 +44,5 @@ class PathTransformer(BaseTransformer):
         data['frame_id'] = "nwu"
         
         payload = json.dumps(data).encode("utf8")
-        self.notify_callbacks(topic_name, payload, last_pose_ts)
+        self.notify_callbacks("foxglove.PosesInFrame", 
+                              topic_name, payload, last_pose_ts)

@@ -19,24 +19,31 @@ class Odometry3DTransformer(BaseTransformer):
     def transform(self, topic_type, topic_name, msg, ts):
         position_msg = msg.pose.position
         orientation_msg = msg.pose.orientation
+        frame = "nwu" if msg.bodyFrame == 0 else "ned"
 
-        data = {}
+        odom_data = {}
+        tf_data = {}
         odom = {}
-        odom['position'] = { 
+        odom['position'] = tf_data['translation'] = { 
             "x": position_msg.x, 
             "y": position_msg.y,
             "z": position_msg.z }
-        odom['orientation'] = {
+        odom['orientation'] = tf_data['rotation'] = {
             "x": orientation_msg.x,
             "y": orientation_msg.y,
             "z": orientation_msg.z,
             "w": orientation_msg.w }
-        data['poses'] = [odom]
-        data['timestamp'] = {
+        odom_data['poses'] = [odom]
+        odom_data['timestamp'] = {
             "sec": msg.header.stamp // 1000000000,
             "nsec": msg.header.stamp % 1000000000
         }
-        data['frame_id'] = "nwu"
-       
-        payload = json.dumps(data).encode("utf8")
-        self.notify_callbacks(topic_name, payload, msg.header.stamp)
+        odom_data['frame_id'] = tf_data['timestamp'] = frame
+        frame_prefix = f"{msg.header.frameId}_" if msg.header.frameId != "" else ""
+        tf_data['child_frame_id'] = f"{frame_prefix}body_{frame}"
+        tf_data['parent_frame_id'] = frame
+        
+        self.notify_callbacks("foxglove.PosesInFrame", topic_name, 
+                              json.dumps(odom_data).encode("utf8"), msg.header.stamp)
+        self.notify_callbacks("foxglove.FrameTransform", topic_name, 
+                              json.dumps(tf_data).encode("utf8"), msg.header.stamp)

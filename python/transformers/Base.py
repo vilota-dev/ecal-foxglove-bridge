@@ -12,36 +12,45 @@ sys.path.insert(0, ecal_python_path)
 from capnp_subscriber import CapnpSubscriber
 
 ecal_to_foxglove = {
-    "Odometry3d": "PosesInFrame",
-    "Path": "PosesInFrame",
-    "Image": "CompressedImage"
+    "Odometry3d": ["PosesInFrame", "FrameTransform"],
+    "Path": ["PosesInFrame"],
+    "Image": ["CompressedImage"],
+    "TagDetections": ["CompressedImage", "PosesInFrame"],
+    "Landmarks" : ["SceneUpdate"]
 }
 
-def read_json_schema(ecal_typename):
-    json_typename = ecal_to_foxglove[ecal_typename]
+def read_json_schema(json_typename: str):
     return open(f"{jsonschema_path}/{json_typename}.json")
 
 class BaseTransformer(ABC):
-    TransformType = None
 
     def __init__(self, topic, ecal_msg, name) -> None:
-        ecal_struct = ecal_msg.__dict__[name]
-
-        self.subscribers = []
-        self.json_schema = json.load(read_json_schema(name))
-        self.name = name
+        # ecal types
         self.topic = topic
-        self.typeclass = ecal_struct
+        self.name = name
+        self.typeclass = ecal_msg.__dict__[name]
+
+        # foxglove types
+        self.foxglove_types = ecal_to_foxglove[name]
+        self.jsonschemas = [json.load(read_json_schema(type)) for type in self.foxglove_types]
+        
         self.sub = CapnpSubscriber(self.name,
                             self.topic,
                             self.typeclass)
 
-    def set_callback(self, callback):
-        self.subscribers.append(callback)
+        # external callbacks
+        self.subscribers = {}
+        for type in self.foxglove_types:
+            self.subscribers[f"foxglove.{type}"] = []
 
-    def notify_callbacks(self, topic_name, msg, ts):
-        for callback in self.subscribers:
-            callback(topic_name, msg, ts)
+    def set_callback(self, foxglove_type, callback):
+        self.subscribers[foxglove_type].append(callback)
+
+    def notify_callbacks(self,
+                         foxglove_type,
+                         topic_name, msg, ts):
+        for cb in self.subscribers[foxglove_type]:
+            cb(topic_name, msg, ts)
 
     # can throw jsonschema.exceptions.ValidationError
     # or jsonschema.exceptions.SchemaError
