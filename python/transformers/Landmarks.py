@@ -68,7 +68,6 @@ class LandmarksTransformer(BaseTransformer):
                 "y": cov_orientation.y,
                 "z": cov_orientation.z,
                 "w": cov_orientation.w }
-            print(cov_scale)
             sphere['size'] = {
                 "x": cov_scale.x,
                 "y": cov_scale.y,
