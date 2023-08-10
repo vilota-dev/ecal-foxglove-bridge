@@ -20,25 +20,29 @@ class LandmarksTransformer(BaseTransformer):
 
         data = {}
         data['cubes'] = []
+        data['spheres'] = []
 
         for lm in msg.landmarks:
-            cube = {}
             pose = lm.pose
             position = pose.position
             orientation = pose.orientation
-            if lm.id != 3:
-                continue
 
+            cov_pose = lm.covPose
+            cov_position = cov_pose.position
+            cov_orientation = cov_pose.orientation
+            cov_scale = lm.covScale
+
+            cube = {}
             cube['pose'] = {}
             cube['pose']['position'] = {
                 "x": position.x, 
                 "y": position.y,
                 "z": position.z }
             cube['pose']['orientation'] = {
-                "x": orientation.x,
-                "y": orientation.y,
-                "z": orientation.z,
-                "w": orientation.w }
+                "x": cov_orientation.x,
+                "y": cov_orientation.y,
+                "z": cov_orientation.z,
+                "w": cov_orientation.w }
             cube['size'] = {
                 "x": 0.02,
                 "y": lm.size,
@@ -52,7 +56,33 @@ class LandmarksTransformer(BaseTransformer):
             }
             cube['id'] = lm.id
             data['cubes'].append(cube)
-        
+
+            sphere = {}
+            sphere['pose'] = {}
+            sphere['pose']['position'] = {
+                "x": cov_position.x, 
+                "y": cov_position.y,
+                "z": cov_position.z }
+            sphere['pose']['orientation'] = {
+                "x": cov_orientation.x,
+                "y": cov_orientation.y,
+                "z": cov_orientation.z,
+                "w": cov_orientation.w }
+            print(cov_scale)
+            sphere['size'] = {
+                "x": cov_scale.x,
+                "y": cov_scale.y,
+                "z": cov_scale.z
+            }
+            sphere['color'] = {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 1.0,
+                "a": 0.2
+            }
+            sphere['id'] = lm.id
+            data['spheres'].append(sphere)
+
         ts = msg.header.stamp
         data['timestamp'] = {
             "sec": ts // 1000000000,
