@@ -1,6 +1,9 @@
 [submodule "external/ecal-common"]
 	path = external/ecal-common
-	url = git@github.com:vilota-dev/ecal-common.git
+	url = https://github.com/vilota-dev/ecal-common.git
 [submodule "external/foxglove-schemas"]
 	path = external/foxglove-schemas
 	url = git@github.com:foxglove/schemas.git
+[submodule "external/schemas"]
+	path = external/foxglove-schemas
+	url = https://github.com/foxglove/schemas.git
